@@ -1,0 +1,6 @@
+.idea/
+kuack-registry
+coverage.*
+.DS_Store
+Thumbs.db
+test-output.log

@@ -1,0 +1,221 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  merge_group:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CGO_ENABLED: 0 # disable CGO for static binaries, same as in builds
+  GOPROXY: https://proxy.golang.org,direct # use Go module proxy
+  GOGC: "200" # speed up builds by increasing GC target percentage
+  GOFLAGS: "-mod=readonly" # skip update checks + CI fails if modules are not in sync
+
+jobs:
+  pre-commit:
+    name: Pre-commit
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/main') # runs on main to update the cache used in PRs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.x'
+          cache: 'pip'
+          cache-dependency-path: '.pre-commit-config.yaml'
+      - name: Cache pre-commit
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+
+  install-deps:
+    name: Install Dependencies
+    runs-on: ubuntu-latest # runs in PRs, merge queues and on main
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.5'
+          cache: true
+      - name: Download dependencies
+        run: go mod download
+
+  build-check:
+    name: Build Check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    needs: install-deps
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.5'
+          cache: true
+      - name: Build
+        run: go build -v ./...
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    needs: install-deps
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.5'
+          cache: true
+      - name: Test
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -coverprofile=coverage.out ./... | tee test-output.log
+      - name: Generate Coverage HTML
+        run: go tool cover -html=coverage.out -o coverage.html
+      - name: Upload Coverage Report
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-report
+          path: coverage.html
+      - name: Check Coverage
+        run: |
+          grep "coverage:" test-output.log | grep -v "/testutil" | awk '{
+            pkg=$2
+            for(i=1;i<=NF;i++) {
+              if($i ~ /%/) {
+                sub("%","",$i);
+                if(($i+0) < 80.0) {
+                  print "FAIL: " pkg " coverage is " $i "% (should be at least 80%)";
+                  exit 1
+                }
+              }
+            }
+          }'
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    needs: install-deps
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.5'
+          cache: true
+      - name: Cache golangci-lint binary
+        uses: actions/cache@v5
+        with:
+          path: ~/go/bin/golangci-lint
+          key: golangci-lint-go1.25.5-latest
+      - name: GolangCI-Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.6
+
+  vet:
+    name: Vet
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    needs: install-deps
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.5'
+          cache: true
+      - name: Vet
+        run: go vet ./...
+
+  fmt:
+    name: Format
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' || github.event_name == 'merge_group'
+    needs: install-deps
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: '1.25.5'
+          cache: true
+      - name: Format Check
+        run: |
+          if [ -n "$(gofmt -l .)" ]; then
+            echo "Go code is not formatted:"
+            gofmt -d .
+            exit 1
+          fi
+
+  gosec:
+    name: Security
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' # only run on PRs
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - name: Run Gosec Security Scanner
+        uses: securego/gosec@master
+        with:
+          args: ./...
+
+  ci-passed:
+    name: CI Passed
+    runs-on: ubuntu-latest
+    if: always() && github.event_name == 'pull_request' # only run on PRs
+    needs: [pre-commit, test, lint, vet, fmt, gosec, build-check]
+    steps:
+      - name: Check status of all required jobs
+        run: |
+          echo "Results: ${{ toJson(needs) }}"
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" || "${{ contains(needs.*.result, 'cancelled') }}" == "true" ]]; then
+            echo "One or more jobs failed or were cancelled"
+            exit 1
+          fi
+          if [[ "${{ contains(needs.*.result, 'skipped') }}" == "true" ]]; then
+            echo "One or more jobs were skipped, but strictly required"
+            exit 1
+          fi
+          echo "All required checks passed"

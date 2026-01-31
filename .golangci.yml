@@ -1,0 +1,45 @@
+# https://golangci-lint.run/docs/configuration/file/
+version: "2"
+linters:
+  default: all
+  disable:
+    - wsl         # deprecated, replaced by wsl_v5
+    - cyclop      # covered by gocyclo
+    - gocognit    # covered by gocyclo
+    - lll         # some lines can be long
+    - revive      # conflicts with other linters
+    - depguard    # too restrictive for imports
+    - funlen      # function length is a style preference
+    - varnamelen  # variable name length is a style preference
+    - wrapcheck   # not needed in some cases
+    - exhaustruct # too noisy for struct initialization
+    - godox       # allow intentional documentation comments
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+  uniq-by-line: false
+  fix: true
+output:
+  formats:
+    text:
+      path: stdout
+      colors: true
+  sort-order:
+    - linter
+    - severity
+    - file
+  show-stats: false
+run:
+  timeout: 5m
+  relative-path-mode: gomod
+  issues-exit-code: 2
+  modules-download-mode: readonly
+  allow-parallel-runners: true
+  allow-serial-runners: true
+  concurrency: 4
+severity:
+  default: error
+  rules:
+    - linters:
+        - dupl
+      severity: info
