@@ -1,3 +1,9 @@
+## [1.0.1](https://github.com/kuack-io/registry/compare/1.0.0...1.0.1) (2026-02-06)
+
+### Dependencies
+
+* **deps:** bump github.com/stretchr/testify from 1.9.0 to 1.11.1 ([6310a31](https://github.com/kuack-io/registry/commit/6310a3115e1152f3cfcbc398f1b40758c73773a5))
+
 ## 1.0.0 (2026-01-31)
 
 ### Features
