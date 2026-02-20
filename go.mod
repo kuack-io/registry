@@ -5,7 +5,7 @@ go 1.25.5
 require (
 	github.com/alicebob/miniredis/v2 v2.36.1
 	github.com/google/go-containerregistry v0.20.7
-	github.com/redis/go-redis/v9 v9.17.3
+	github.com/redis/go-redis/v9 v9.18.0
 	github.com/stretchr/testify v1.11.1
 	k8s.io/klog/v2 v2.130.1
 )
@@ -27,6 +27,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/vbatts/tar-split v0.12.2 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
+	go.uber.org/atomic v1.11.0 // indirect
 	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
