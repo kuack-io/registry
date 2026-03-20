@@ -97,21 +97,29 @@ The service is configured via environment variables:
 | Variable | Description | Default |
 |----------|-------------|---------|
 | `PORT` | HTTP Server Port | `8080` |
-| `REDIS_ADDR` | Redis address | `localhost:6379` |
-| `REDIS_PASSWORD` | Redis password | *(empty)* |
-| `REDIS_DB` | Redis DB index | `0` |
+| `REDIS_ADDR` | Redis/Valkey address | `localhost:6379` |
+| `REDIS_PASSWORD` | Redis/Valkey password | *(empty)* |
+| `REDIS_DB` | Redis/Valkey DB index | `0` |
 | `KLOG_VERBOSITY` | Log level (0-10) | `2` |
+
+### Valkey Compatibility
+
+This service works with both [Redis](https://redis.io/) and [Valkey](https://valkey.io/). Valkey is an open-source Redis fork maintained by the Linux Foundation, created after Redis changed its license in 2024. Valkey is fully protocol-compatible with Redis, so no code changes are required - just point `REDIS_ADDR` to your Valkey instance.
+
+The Helm chart uses Valkey by default (see [helm/README.md](../helm/README.md) for details).
+
+> **Future Plans:** Native support for managed Redis/Valkey services (e.g., AWS ElastiCache with IAM authentication) is not yet implemented but may be added in the future.
 
 ## Caching Strategy & Design Rationale
 
-### Why Redis for WASM Blob Storage?
+### Why Redis/Valkey for WASM Blob Storage?
 
 Kuack is designed for environments with:
 - **Millions of concurrent agents** (browsers running WASM)
 - **Limited WASM image catalog** (tens to hundreds of unique images)
 - **Dynamic infrastructure** (pods may restart frequently)
 
-Given these constraints, we deliberately store both **metadata and WASM blobs** in Redis.
+Given these constraints, we deliberately store both **metadata and WASM blobs** in Redis/Valkey.
 
 #### Design Decision: Delegate Memory to Redis
 
